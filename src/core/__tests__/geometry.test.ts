@@ -16,7 +16,7 @@ describe('rotationsOf', () => {
 
 describe('intersects', () => {
   const box = (x: number, y: number, z: number): Placement => ({
-    itemId: 'box', x, y, z, dimensions: { length: 2, width: 2, height: 2 },
+    itemId: 'box', copyId: 'box#1', x, y, z, dimensions: { length: 2, width: 2, height: 2 },
   });
 
   it('allows boxes whose faces only touch', () => {

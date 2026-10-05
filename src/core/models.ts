@@ -14,21 +14,33 @@ export interface PackingItem extends Dimensions {
   priority: 1 | 2 | 3;
   mustHave: boolean;
   fragile?: boolean;
+  /** 计划携带的数量（正整数），清单纯粹按种类编辑 */
+  quantity: number;
+  /** 每个副本的稳定身份 ID，长度恒等于 quantity，如 item-id#1、item-id#2 */
+  copies: string[];
 }
 
 export interface Placement {
   itemId: string;
+  /** 被定位到的具体副本 */
+  copyId: string;
   x: number;
   y: number;
   z: number;
   dimensions: Dimensions;
 }
 
+export interface UnplacedEntry {
+  item: PackingItem;
+  copyId: string;
+  reason: string;
+}
+
 export interface PackingPlan {
   id: PlanMode;
   name: string;
   placements: Placement[];
-  unplaced: Array<{ item: PackingItem; reason: string }>;
+  unplaced: UnplacedEntry[];
   totalWeight: number;
   usedVolume: number;
   capacityRatio: number;

@@ -36,4 +36,13 @@ describe('LocalPlannerRepository', () => {
     expect(result.value.items.length).toBeGreaterThan(0);
     expect(result.warning).toContain('已恢复示例');
   });
+
+  it('migrates legacy records without quantity to a single copy', () => {
+    const snapshot = createSampleSnapshot();
+    const legacy = { ...snapshot, items: snapshot.items.map(({ copies: _copies, quantity: _quantity, ...rest }) => rest) };
+    storage.setItem('c2c-004.planner', JSON.stringify(legacy));
+    const result = new LocalPlannerRepository(storage).load();
+    expect(result.value.items.every((item) => item.quantity === 1)).toBe(true);
+    expect(result.value.items[0]?.copies).toEqual([`${result.value.items[0]?.id}#1`]);
+  });
 });

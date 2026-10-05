@@ -1,4 +1,5 @@
 import { createSampleSnapshot } from '../core/sample-data';
+import { normalizeSnapshotItems } from '../core/item-copies';
 import type { PackingSnapshot } from '../core/models';
 import type { LoadResult, PlannerRepository } from '../ports/planner-repository.port';
 
@@ -11,7 +12,9 @@ export class LocalPlannerRepository implements PlannerRepository {
     const raw = this.storage.getItem(KEY);
     if (!raw) return { value: createSampleSnapshot() };
     try {
-      return { value: JSON.parse(raw) as PackingSnapshot };
+      const snapshot = JSON.parse(raw) as PackingSnapshot;
+      // 旧记录没有数量信息，默认每种一件并补齐副本身份
+      return { value: { ...snapshot, items: normalizeSnapshotItems(snapshot.items ?? []) } };
     } catch {
       return { value: createSampleSnapshot(), warning: '本地数据无法读取，已恢复示例。' };
     }

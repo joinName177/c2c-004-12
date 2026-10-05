@@ -1,4 +1,5 @@
 import { intersects, rotationsOf } from './geometry';
+import { copySequence } from './item-copies';
 import { itemVolume, suitcaseVolume, type PackingItem, type PackingPlan, type Placement, type PlanMode, type Suitcase } from './models';
 
 const PLAN_NAMES: Record<PlanMode, string> = { minimal: '精简版', comfort: '舒适版', shopping: '购物版' };
@@ -13,13 +14,15 @@ export function validateSuitcase(suitcase: Suitcase): string[] {
   return errors;
 }
 
+/** 同种类的副本必须连续装箱，种类之间沿用原有优先级排序，ID 兜底保证结果确定。 */
 function ordered(items: PackingItem[], mode: PlanMode): PackingItem[] {
   return [...items].sort((a, b) => {
     const required = Number(b.mustHave) - Number(a.mustHave);
     if (required) return required;
     const priority = b.priority - a.priority;
     if (priority) return priority;
-    return mode === 'shopping' ? a.weight - b.weight : itemVolume(b) - itemVolume(a) || a.id.localeCompare(b.id);
+    if (mode === 'shopping') return a.weight - b.weight || a.id.localeCompare(b.id);
+    return itemVolume(b) - itemVolume(a) || a.id.localeCompare(b.id);
   });
 }
 
@@ -43,42 +46,50 @@ export function packItems(suitcase: Suitcase, items: PackingItem[], mode: PlanMo
   let totalWeight = 0;
   let usedVolume = 0;
 
+  const pushUnplaced = (item: PackingItem, copyId: string, reason: string) => unplaced.push({ item, copyId, reason });
+
   for (const item of ordered(items, mode)) {
+    const copies = [...item.copies].sort((a, b) => copySequence(a) - copySequence(b) || a.localeCompare(b));
+
     if ([item.length, item.width, item.height, item.weight].some((value) => !(value > 0))) {
-      unplaced.push({ item, reason: '尺寸或重量无效' });
-      continue;
-    }
-    if (totalWeight + item.weight > maxWeight) {
-      unplaced.push({ item, reason: '超过当前方案承重预留' });
-      continue;
-    }
-    if (usedVolume + itemVolume(item) > capacity) {
-      unplaced.push({ item, reason: '超过当前方案空间预留' });
+      copies.forEach((copyId) => pushUnplaced(item, copyId, '尺寸或重量无效'));
       continue;
     }
 
-    let placement: Placement | undefined;
-    for (const point of candidatePoints(placements)) {
-      for (const dimensions of rotationsOf(item)) {
-        const candidate: Placement = { itemId: item.id, ...point, dimensions };
-        const inBounds = candidate.x + dimensions.length <= suitcase.length
-          && candidate.y + dimensions.width <= suitcase.width
-          && candidate.z + dimensions.height <= suitcase.height;
-        if (inBounds && placements.every((placed) => !intersects(candidate, placed))) {
-          placement = candidate;
-          break;
-        }
+    for (const copyId of copies) {
+      if (totalWeight + item.weight > maxWeight) {
+        pushUnplaced(item, copyId, '超过当前方案承重预留');
+        continue;
       }
-      if (placement) break;
-    }
+      if (usedVolume + itemVolume(item) > capacity) {
+        pushUnplaced(item, copyId, '超过当前方案空间预留');
+        continue;
+      }
 
-    if (!placement) {
-      unplaced.push({ item, reason: '没有可用的连续空间' });
-      continue;
+      let placement: Placement | undefined;
+      for (const point of candidatePoints(placements)) {
+        for (const dimensions of rotationsOf(item)) {
+          const candidate: Placement = { itemId: item.id, copyId, ...point, dimensions };
+          const inBounds = candidate.x + dimensions.length <= suitcase.length
+            && candidate.y + dimensions.width <= suitcase.width
+            && candidate.z + dimensions.height <= suitcase.height;
+          if (inBounds && placements.every((placed) => !intersects(candidate, placed))) {
+            placement = candidate;
+            break;
+          }
+        }
+        if (placement) break;
+      }
+
+      if (!placement) {
+        pushUnplaced(item, copyId, '没有可用的连续空间');
+        continue;
+      }
+      placements.push(placement);
+      // 每一件副本都独立占用重量和空间
+      totalWeight += item.weight;
+      usedVolume += itemVolume(item);
     }
-    placements.push(placement);
-    totalWeight += item.weight;
-    usedVolume += itemVolume(item);
   }
 
   return {

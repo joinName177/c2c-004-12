@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { generatePlans } from '../plan-service';
+import { initialCopies } from '../item-copies';
 import type { PackingItem, Suitcase } from '../models';
 
 const box: Suitcase = { length: 10, width: 8, height: 6, maxWeight: 10 };
-const item = (id: string, overrides: Partial<PackingItem> = {}): PackingItem => ({ id, name: id, category: '衣物', length: 4, width: 2, height: 2, weight: 1, priority: 1, mustHave: false, ...overrides });
+const item = (id: string, overrides: Partial<PackingItem> = {}): PackingItem => ({ id, name: id, category: '衣物', length: 4, width: 2, height: 2, weight: 1, priority: 1, mustHave: false, quantity: 1, copies: initialCopies(id, 1), ...overrides });
 
 describe('generatePlans', () => {
   it('creates three named strategies', () => {
@@ -22,5 +23,14 @@ describe('generatePlans', () => {
     const plans = generatePlans(box, items);
     expect(plans.shopping.usedVolume).toBeLessThanOrEqual(plans.comfort.usedVolume);
     expect(plans.shopping.unplaced.length).toBeGreaterThanOrEqual(plans.comfort.unplaced.length);
+  });
+
+  it('counts every copy independently in all three plans', () => {
+    const plans = generatePlans(box, [item('sock', { quantity: 3, copies: initialCopies('sock', 3) })]);
+    for (const plan of Object.values(plans)) {
+      expect(plan.placements.length + plan.unplaced.length).toBe(3);
+      expect(new Set(plan.placements.map((p) => p.copyId)).size).toBe(plan.placements.length);
+      expect(plan.totalWeight).toBe(plan.placements.length * 1);
+    }
   });
 });
