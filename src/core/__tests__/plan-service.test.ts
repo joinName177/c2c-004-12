@@ -3,7 +3,7 @@ import { generatePlans } from '../plan-service';
 import type { PackingItem, Suitcase } from '../models';
 
 const box: Suitcase = { length: 10, width: 8, height: 6, maxWeight: 10 };
-const item = (id: string, overrides: Partial<PackingItem> = {}): PackingItem => ({ id, name: id, category: '衣物', length: 4, width: 2, height: 2, weight: 1, priority: 1, mustHave: false, ...overrides });
+const item = (id: string, overrides: Partial<PackingItem> = {}): PackingItem => ({ id, name: id, category: '衣物', length: 4, width: 2, height: 2, weight: 1, quantity: 1, priority: 1, mustHave: false, ...overrides });
 
 describe('generatePlans', () => {
   it('creates three named strategies', () => {
@@ -14,7 +14,7 @@ describe('generatePlans', () => {
 
   it('places must-have and high-priority items first', () => {
     const plans = generatePlans(box, [item('low'), item('must', { mustHave: true }), item('high', { priority: 3 })]);
-    expect(plans.comfort.placements.map((p) => p.itemId).slice(0, 2)).toEqual(['must', 'high']);
+    expect(plans.comfort.placements.map((p) => `${p.itemId}#${p.instanceIndex}`).slice(0, 2)).toEqual(['must#0', 'high#0']);
   });
 
   it('shopping mode reserves more free capacity than comfort mode', () => {
@@ -22,5 +22,13 @@ describe('generatePlans', () => {
     const plans = generatePlans(box, items);
     expect(plans.shopping.usedVolume).toBeLessThanOrEqual(plans.comfort.usedVolume);
     expect(plans.shopping.unplaced.length).toBeGreaterThanOrEqual(plans.comfort.unplaced.length);
+  });
+
+  it('counts every copy across the three plans', () => {
+    const plans = generatePlans(box, [item('coat', { quantity: 4 })]);
+    for (const plan of Object.values(plans)) {
+      expect(plan.itemSummaries[0]?.quantity).toBe(4);
+      expect(plan.placements.length + plan.unplaced.length).toBe(4);
+    }
   });
 });

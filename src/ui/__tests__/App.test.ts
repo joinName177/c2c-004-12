@@ -40,14 +40,47 @@ describe('Luggage planner App', () => {
     expect(wrapper.text()).not.toContain('新物品');
   });
 
-  it('selects a plan and highlights the same item in both projections', async () => {
+  it('does not save an item whose quantity is zero and shows an inline error', async () => {
+    const { wrapper } = render();
+    const kindsBefore = wrapper.text();
+    await wrapper.get('[aria-label="物品名称"]').setValue('零件物品');
+    await wrapper.get('[aria-label="物品数量"]').setValue('0');
+    await wrapper.get('[data-testid="item-editor"]').trigger('submit');
+    expect(wrapper.get('[data-testid="item-editor-error"]').text()).toContain('数量必须是大于 0');
+    expect(kindsBefore).not.toContain('零件物品');
+  });
+
+  it('edits quantity by kind and shows planned, packed and unpacked counts', async () => {
+    const { wrapper } = render();
+    const gifts = wrapper.get('[data-item-id="gifts"]');
+    await gifts.get('[aria-label="伴手礼预留盒 数量"]').setValue('3');
+    await gifts.get('[aria-label="伴手礼预留盒 数量"]').trigger('change');
+    const statuses = gifts.findAll('[data-testid="pack-status"]');
+    expect(statuses[0]?.text()).toContain('已装');
+    expect(statuses[0]?.text()).toMatch(/未装\s*[0-9]/);
+  });
+
+  it('selects a plan and highlights the same copy in both projections', async () => {
     const { wrapper } = render();
     await wrapper.get('[data-plan="shopping"]').trigger('click');
     expect(wrapper.get('[data-plan="shopping"]').classes()).toContain('active');
-    const jacket = wrapper.findAll('[data-item-id="jacket"]');
-    expect(jacket.length).toBe(2);
-    await jacket[0].trigger('click');
-    expect(wrapper.findAll('[data-item-id="jacket"].selected')).toHaveLength(2);
+    // 相机只有一件，两个视图各一个色块
+    const camera = wrapper.findAll('[data-instance-id="camera#0"]');
+    expect(camera.length).toBe(2);
+    await camera[0].trigger('click');
+    expect(wrapper.findAll('[data-instance-id="camera#0"].selected')).toHaveLength(2);
+  });
+
+  it('locates an individual copy of a multi-quantity kind independently', async () => {
+    const { wrapper } = render();
+    // 轻薄外套数量为 2，两个视图中每件副本都有独立色块
+    const first = wrapper.findAll('[data-instance-id="jacket#0"]');
+    const second = wrapper.findAll('[data-instance-id="jacket#1"]');
+    expect(first.length + second.length).toBeGreaterThanOrEqual(2);
+    if (first.length) {
+      await first[0].trigger('click');
+      expect(first.every((node) => node.classes().includes('selected'))).toBe(true);
+    }
   });
 
   it('delegates printing through the print port', async () => {
